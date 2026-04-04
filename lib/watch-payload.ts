@@ -1,4 +1,5 @@
 import type { Platform, WatchStatus } from "@/lib/types";
+import { isValidHttpsWatchUrl } from "@/lib/url-validation";
 
 export type WatchUrlInput = {
   url: string;
@@ -63,10 +64,6 @@ function parseStatus(value: unknown, fallback: WatchStatus): WatchStatus {
   return fallback;
 }
 
-function isHttpsUrl(value: string): boolean {
-  return value.trim().startsWith("https://");
-}
-
 function parseUrlInputs(value: unknown): WatchUrlInput[] | null {
   if (!Array.isArray(value)) return null;
   const out: WatchUrlInput[] = [];
@@ -74,7 +71,7 @@ function parseUrlInputs(value: unknown): WatchUrlInput[] | null {
     if (!item || typeof item !== "object") return null;
     const row = item as Record<string, unknown>;
     const url = typeof row.url === "string" ? row.url.trim() : "";
-    if (!url || !isHttpsUrl(url)) return null;
+    if (!url || !isValidHttpsWatchUrl(url)) return null;
     out.push({
       url,
       platform:

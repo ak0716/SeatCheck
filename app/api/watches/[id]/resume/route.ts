@@ -16,13 +16,17 @@ export async function PATCH(_request: Request, context: RouteContext) {
       .update({ status: "active", consecutive_failures: 0 })
       .eq("id", id)
       .select("*")
-      .single();
+      .maybeSingle();
 
     if (error) {
       return NextResponse.json(
         { error: "Failed to resume watch", details: error.message },
         { status: 500 },
       );
+    }
+
+    if (!data) {
+      return NextResponse.json({ error: "Watch not found" }, { status: 404 });
     }
 
     return NextResponse.json({ data });

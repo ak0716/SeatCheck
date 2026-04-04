@@ -5,6 +5,7 @@ import { useState } from "react";
 import type { AddWatchSource } from "@/components/add-watch/types";
 
 import type { Platform } from "@/lib/types";
+import { isValidHttpsWatchUrl } from "@/lib/url-validation";
 
 function truncateUrl(url: string, max: number): string {
   if (url.length <= max) return url;
@@ -71,7 +72,7 @@ export function AddWatchStep2Sources({
   const [editingLabel, setEditingLabel] = useState(false);
 
   const canAddMore = sources.length < 3;
-  const addValid = addUrl.trim().startsWith("https://");
+  const addValid = isValidHttpsWatchUrl(addUrl);
 
   return (
     <div className="grid gap-[var(--space-4)]">

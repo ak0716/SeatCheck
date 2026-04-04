@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { Platform } from "@/lib/types";
+import { isValidHttpsWatchUrl } from "@/lib/url-validation";
 
 const MAX_URL_LENGTH = 2048;
 const FETCH_TIMEOUT_MS = 12_000;
@@ -79,7 +80,7 @@ export async function fetchTicketPagePreview(
   const trimmed = url.trim();
   const { platform, eventId } = detectUrlMetadata(trimmed);
 
-  if (!trimmed.startsWith("https://") || trimmed.length > MAX_URL_LENGTH) {
+  if (!isValidHttpsWatchUrl(trimmed) || trimmed.length > MAX_URL_LENGTH) {
     return { suggestedLabel: null, platform, eventId };
   }
 

@@ -1,5 +1,7 @@
 "use client";
 
+import { isValidHttpsWatchUrl } from "@/lib/url-validation";
+
 type AddWatchStep1UrlProps = {
   url: string;
   onUrlChange: (value: string) => void;
@@ -17,7 +19,7 @@ export function AddWatchStep1Url({
   loading,
   onContinue,
 }: AddWatchStep1UrlProps) {
-  const valid = url.trim().startsWith("https://");
+  const valid = isValidHttpsWatchUrl(url);
 
   return (
     <div className="grid gap-[var(--space-3)]">
@@ -41,7 +43,7 @@ export function AddWatchStep1Url({
         {urlError ? (
           <p className="text-error text-[var(--color-negative)]">{urlError}</p>
         ) : null}
-        {showHttpsHint && !valid ? (
+        {showHttpsHint ? (
           <p className="text-error text-[var(--color-negative)]">
             Please enter a valid URL starting with https://
           </p>

@@ -6,6 +6,7 @@ import type { AddWatchSource } from "@/components/add-watch/types";
 import type { WatchWithUrls } from "@/lib/types";
 
 import { FrequencySelector } from "@/components/FrequencySelector";
+import { isValidHttpsWatchUrl } from "@/lib/url-validation";
 
 type PreviewResponse = {
   suggestedLabel: string | null;
@@ -41,7 +42,7 @@ export function EditWatchForm({ watch, onSaved, onCancel }: EditWatchFormProps) 
   const [alertSms, setAlertSms] = useState(watch.alert_sms);
   const [emailAddress, setEmailAddress] = useState(watch.alert_email_address ?? "");
   const [phone, setPhone] = useState(watch.alert_phone_e164 ?? "");
-  const [frequency, setFrequency] = useState(60);
+  const [frequency, setFrequency] = useState(watch.frequency_minutes ?? 60);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -69,8 +70,8 @@ export function EditWatchForm({ watch, onSaved, onCancel }: EditWatchFormProps) 
 
   async function handleAddUrl() {
     const u = addUrl.trim();
-    if (!u.startsWith("https://")) {
-      setAddError("Please enter a valid URL starting with https://");
+    if (!isValidHttpsWatchUrl(u)) {
+      setAddError("Please enter a valid https:// URL");
       return;
     }
     if (sources.length >= 3) return;
@@ -193,7 +194,7 @@ export function EditWatchForm({ watch, onSaved, onCancel }: EditWatchFormProps) 
             <button
               type="button"
               onClick={handleAddUrl}
-              disabled={addLoading || !addUrl.trim().startsWith("https://")}
+              disabled={addLoading || !isValidHttpsWatchUrl(addUrl)}
               className="rounded-[var(--radius-md)] border-[length:var(--border-default)] border-solid border-[var(--color-border)] bg-[var(--color-bg-raised)] px-[var(--space-3)] text-body text-[var(--color-text)] disabled:opacity-50"
               style={{ height: "var(--height-button-sm)" }}
             >

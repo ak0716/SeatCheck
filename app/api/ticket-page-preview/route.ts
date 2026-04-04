@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { fetchTicketPagePreview } from "@/lib/ticket-url-preview";
+import { isValidHttpsWatchUrl } from "@/lib/url-validation";
 
 const MAX_BODY = 4096;
 
@@ -20,9 +21,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
     }
     const url = (body as { url?: unknown }).url;
-    if (typeof url !== "string" || !url.trim().startsWith("https://")) {
+    if (typeof url !== "string" || !isValidHttpsWatchUrl(url)) {
       return NextResponse.json(
-        { error: "url must be a string starting with https://" },
+        { error: "url must be a valid https:// URL with a host" },
         { status: 400 },
       );
     }

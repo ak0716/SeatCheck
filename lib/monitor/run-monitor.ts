@@ -270,6 +270,7 @@ async function processOneWatch(
        WHERE watch_id = $1
        ORDER BY checked_at DESC
        LIMIT 1`,
+      [watch.id],
     );
     prevSnap = pRes.rows[0] ?? null;
 

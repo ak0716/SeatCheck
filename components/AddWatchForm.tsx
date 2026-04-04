@@ -8,6 +8,7 @@ import { AddWatchStep3Conditions } from "@/components/add-watch/AddWatchStep3Con
 import { AddWatchStep4Contact } from "@/components/add-watch/AddWatchStep4Contact";
 import { AddWatchStep5Confirm } from "@/components/add-watch/AddWatchStep5Confirm";
 import type { AddWatchSource } from "@/components/add-watch/types";
+import { isValidHttpsWatchUrl } from "@/lib/url-validation";
 
 type PreviewResponse = {
   suggestedLabel: string | null;
@@ -95,7 +96,7 @@ export function AddWatchForm({ onCreated }: AddWatchFormProps) {
 
   const handleStep1Continue = useCallback(async () => {
     const u = step1Url.trim();
-    if (!u.startsWith("https://")) {
+    if (!isValidHttpsWatchUrl(u)) {
       return;
     }
     setStep1Error(null);
@@ -134,8 +135,8 @@ export function AddWatchForm({ onCreated }: AddWatchFormProps) {
 
   const handleAddSource = useCallback(async () => {
     const u = addUrl.trim();
-    if (!u.startsWith("https://")) {
-      setAddError("Please enter a valid URL starting with https://");
+    if (!isValidHttpsWatchUrl(u)) {
+      setAddError("Please enter a valid https:// URL");
       return;
     }
     if (sources.length >= 3) return;
@@ -227,7 +228,7 @@ export function AddWatchForm({ onCreated }: AddWatchFormProps) {
           }}
           urlError={step1Error}
           showHttpsHint={
-            step1Url.trim().length > 0 && !step1Url.trim().startsWith("https://")
+            step1Url.trim().length > 0 && !isValidHttpsWatchUrl(step1Url)
           }
           loading={step1Loading}
           onContinue={handleStep1Continue}
