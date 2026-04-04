@@ -8,14 +8,14 @@ export type DeliveryStatus = "sent" | "failed";
 
 export interface Watch {
   id: string;
+  user_id: string | null;
   label: string;
-  url: string;
-  platform: Platform | null;
-  event_id: string | null;
   price_threshold: number | null;
   group_size: number | null;
   alert_email: boolean;
   alert_sms: boolean;
+  alert_email_address: string | null;
+  alert_phone_e164: string | null;
   frequency_minutes: number;
   status: WatchStatus;
   js_rendered: boolean;
@@ -24,6 +24,19 @@ export interface Watch {
   last_alerted_at: string | null;
   last_failure_reason: string | null;
   created_at: string;
+}
+
+export interface WatchUrl {
+  id: string;
+  watch_id: string;
+  url: string;
+  platform: Platform | null;
+  event_id: string | null;
+  created_at: string;
+}
+
+export interface WatchWithUrls extends Watch {
+  watch_urls: WatchUrl[];
 }
 
 export interface Snapshot {

@@ -27,3 +27,6 @@ pnpm-debug.log*
 
 # vercel
 .vercel
+
+# cursor MCP (may contain tokens; use mcp.json.example as template)
+.cursor/mcp.json

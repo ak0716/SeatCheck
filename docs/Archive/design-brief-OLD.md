@@ -83,86 +83,34 @@ Use `prefers-color-scheme` — do not build a manual toggle or use localStorage.
 
 - Font stack: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif
 - No custom web fonts — system fonts load instantly and suit the functional aesthetic
-- Line height: 1.6 for body, 1.4 for compact UI
-- Two weights only: 400 (regular) and 500 (medium). Never use 600 or above.
-
-### Type scale
-
-| Token | Size | Weight | Use |
-|-------|------|--------|-----|
-| `--text-display` | 1.25rem | 500 | Page-level headings |
-| `--text-title` | 1.125rem | 500 | Card titles, prominent labels |
-| `--text-section` | 1rem | 500 | Section headers within cards |
-| `--text-body` | 0.875rem | 400 | Primary content, row labels |
-| `--text-small` | 0.75rem | 400 | Field labels, helper text, detection notes, timestamps, step counters |
-
-Apply these as CSS custom properties in `app/globals.css`:
-
-```css
---text-display: 1.25rem;
---text-title: 1.125rem;
---text-section: 1rem;
---text-body: 0.875rem;
---text-small: 0.75rem;
-```
-
-Use `--color-text-primary` vs `--color-text-secondary` to create emphasis at any size — do not add weight variation within `--text-small`.
+- Base size: 14px for dashboard content, 13px for secondary/metadata text
+- Line height: 1.5 for body, 1.3 for labels and compact UI
+- Font weights: 400 (regular), 500 (medium, for labels), 600 (semibold, for headings and values)
+- Never use font-weight above 600
 
 ---
 
 ## Spacing & Layout
 
+- Use an 8px base grid. All spacing values should be multiples of 4px (4, 8, 12, 16, 24, 32...)
+- Component padding: 12px–16px for cards, 8px for compact rows
+- Generous whitespace between sections — breathing room aids legibility
 - Single-column layout on the main dashboard; no sidebars
-- Design should feel generously spaced — err toward more whitespace, not less
-
-### Spacing scale
-
-All spacing uses the following named tokens. Apply as CSS custom properties in `app/globals.css`:
-
-```css
---space-1: 0.25rem;   /* 4px  — tight internal gaps (icon to text) */
---space-2: 0.5rem;    /* 8px  — between tightly related elements */
---space-3: 1rem;      /* 16px — between fields within a section */
---space-4: 1.5rem;    /* 24px — between sections within a card */
---space-5: 2rem;      /* 32px — between cards */
---space-6: 3rem;      /* 48px — page-level vertical rhythm */
-```
-
-Never hardcode spacing values in components. Always reference a spacing token.
 
 ---
 
 ## Component Style Rules
 
-### Component size tokens
-
-Apply as CSS custom properties in `app/globals.css`:
-
-```css
---height-input:      2.5rem;   /* 40px — all text inputs */
---height-button:     2.5rem;   /* 40px — standard buttons, matches input height */
---height-button-sm:  2rem;     /* 32px — compact buttons e.g. "Add" */
---height-stepper:    2rem;     /* 32px — stepper +/- buttons */
---radius-sm:         0.25rem;  /* 4px  — tags, badges, checkboxes */
---radius-md:         0.5rem;   /* 8px  — inputs, buttons */
---radius-lg:         0.75rem;  /* 12px — cards */
---border-default:    0.5px;    /* default border width */
---border-strong:     1px;      /* focused/active/emphasis border width */
---transition:        150ms color, background-color, border-color;
-```
-
 ### Cards / containers
-- Subtle background (`--color-bg-subtle`) with `--border-default` border (`--color-border`)
-- Border radius: `--radius-lg` for cards
+- Subtle background (`--color-bg-subtle`) with a 1px border (`--color-border`)
+- Border radius: 8px for cards, 6px for inputs and buttons, 4px for tags/badges
 - No drop shadows — use background color contrast and borders for elevation instead
-- Card padding: `--space-4` (1.5rem)
 
 ### Buttons
 - Primary action: filled, `--color-accent` background, `--color-bg` text
-- Secondary action: `--color-bg-raised` background, `--color-text` text, `--border-default` border
+- Secondary action: `--color-bg-raised` background, `--color-text` text, 1px border
 - Destructive action: `--color-negative-bg` background, `--color-negative` text
-- Standard height: `--height-button`. Compact height: `--height-button-sm`
-- Border radius: `--radius-md`
+- All buttons: 32px height for standard, 28px for compact contexts
 
 ### Status badges / tags
 - Use muted color fills from the palette — never saturated colors
@@ -172,11 +120,9 @@ Apply as CSS custom properties in `app/globals.css`:
 - Error status: `--color-negative` text, no fill
 
 ### Form inputs
-- Height: `--height-input`. Border radius: `--radius-md`
-- `--border-default` border (`--color-border`), `--color-bg` background
-- Focus state: `--border-strong` border (`--color-border-strong`), no glow or shadow
+- 1px border (`--color-border`), `--color-bg` background
+- Focus state: border color shifts to `--color-border-strong`, no glow or shadow
 - Placeholder text: `--color-text-muted`
-- Disabled/dimmed state: opacity 0.35, pointer-events none
 
 ### Dividers / separators
 - Use border-bottom (`--color-border`) rather than full-width hr elements
