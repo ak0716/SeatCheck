@@ -15,7 +15,6 @@ async function main() {
 
   const { error: deleteError } = await supabase.from("watches").delete().neq("id", "");
   if (deleteError) {
-    // eslint-disable-next-line no-console
     console.error("Failed to clear existing watches", deleteError.message);
     process.exit(1);
   }
@@ -182,7 +181,6 @@ async function main() {
       .single();
 
     if (insertWatchError || !watch) {
-      // eslint-disable-next-line no-console
       console.error("Failed to insert watch", insertWatchError?.message);
       process.exit(1);
     }
@@ -196,18 +194,15 @@ async function main() {
 
     const { error: urlError } = await supabase.from("watch_urls").insert(urlRows);
     if (urlError) {
-      // eslint-disable-next-line no-console
       console.error("Failed to insert watch_urls", urlError.message);
       process.exit(1);
     }
   }
 
-  // eslint-disable-next-line no-console
   console.log(`Inserted ${allSeeds.length} watches with URLs`);
 }
 
 main().catch((error) => {
-  // eslint-disable-next-line no-console
   console.error("Unexpected seed error", error);
   process.exit(1);
 });

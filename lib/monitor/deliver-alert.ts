@@ -37,6 +37,8 @@ export type DeliverAlertInput = {
   watchId: string;
   label: string;
   triggerType: TriggerType;
+  /** When set, used as the email subject instead of the default from triggerType + label. */
+  emailSubject?: string | null;
   body: string;
   alert_email: boolean;
   alert_sms: boolean;
@@ -52,7 +54,9 @@ export async function deliverAlert(
 
   const fromEmail =
     process.env.RESEND_FROM_EMAIL?.trim() || "Seatcheck <onboarding@resend.dev>";
-  const subject = `Seatcheck: ${input.triggerType.replace(/_/g, " ")} — ${input.label}`;
+  const subject =
+    input.emailSubject?.trim() ||
+    `Seatcheck: ${input.triggerType.replace(/_/g, " ")} — ${input.label}`;
 
   if (input.alert_email && input.alert_email_address) {
     methods.push("email");

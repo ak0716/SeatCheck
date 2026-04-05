@@ -2,14 +2,17 @@ import "server-only";
 
 import { Pool } from "pg";
 
-import { shouldAlertAvailability } from "@/lib/monitor/availability";
+import {
+  evaluateWatchCriteria,
+  hasUsableSnapshotSignals,
+  shouldAlertOnTransition,
+} from "@/lib/monitor/alert-eligibility";
 import { deliverAlert } from "@/lib/monitor/deliver-alert";
 import { fetchPage } from "@/lib/monitor/fetch-page";
 import { parseHtml } from "@/lib/monitor/parse-html";
-import {
-  parseDollarString,
-  shouldAlertPriceDrop,
-} from "@/lib/monitor/price-compare";
+import { parseDollarString } from "@/lib/monitor/price-compare";
+
+import type { TriggerType } from "@/lib/types";
 
 const COOLDOWN_MS = 4 * 60 * 60 * 1000;
 
@@ -29,7 +32,45 @@ type WatchRow = {
 type SnapshotRow = {
   extracted_price: string | null;
   extracted_keywords: string[] | null;
+  raw_text: string | null;
 };
+
+function pickAlertLogTriggerType(
+  priceThreshold: number | null,
+): "price_drop" | "availability_change" {
+  return priceThreshold != null ? "price_drop" : "availability_change";
+}
+
+function buildTriggerSummaryLines(
+  priceThreshold: number | null,
+  prev: ReturnType<typeof evaluateWatchCriteria>,
+  curr: ReturnType<typeof evaluateWatchCriteria>,
+): string[] {
+  const lines: string[] = [];
+  if (priceThreshold == null) {
+    lines.push("Availability — tickets appear available.");
+    return lines;
+  }
+  const availBecameTrue =
+    !prev.availabilityMet && curr.availabilityMet;
+  const priceBecameTrue = !prev.priceMet && curr.priceMet;
+  if (availBecameTrue && priceBecameTrue) {
+    lines.push(
+      "Availability and price — tickets appear available and price is at or below your threshold.",
+    );
+  } else if (availBecameTrue) {
+    lines.push(
+      "Availability — tickets now appear available (price already satisfied your threshold).",
+    );
+  } else if (priceBecameTrue) {
+    lines.push(
+      "Price — extracted price is now at or below your threshold (availability already looked good).",
+    );
+  } else {
+    lines.push("Your watch criteria are now met.");
+  }
+  return lines;
+}
 
 function parseBatchSize(): number {
   const raw = process.env.MONITOR_BATCH_SIZE?.trim();
@@ -124,40 +165,100 @@ async function maybeFireAlerts(
     raw_text: string;
   },
   lastAlertedAt: Date | null,
+  ticketUrls: string[],
 ) {
-  const unusable =
-    agg.extracted_price == null && agg.extracted_keywords.length === 0;
-  if (unusable) {
+  const currInput: SnapshotRow = {
+    extracted_price: agg.extracted_price,
+    extracted_keywords: agg.extracted_keywords,
+    raw_text: agg.raw_text,
+  };
+  if (!hasUsableSnapshotSignals(currInput)) {
+    console.info(
+      `[run-monitor] alert skip watch=${watch.id} reason=no_usable_snapshot_signals`,
+    );
     return;
   }
 
   const threshold = thresholdNumber(watch);
-  const prevPrice = prevSnap?.extracted_price ?? null;
-  const prevKw =
-    prevSnap == null ? null : (prevSnap.extracted_keywords ?? []);
-
-  let needPrice = shouldAlertPriceDrop(
-    prevSnap != null,
-    prevPrice,
-    agg.extracted_price,
-    threshold,
-  );
-  let needAvail = shouldAlertAvailability(prevKw, agg.extracted_keywords);
+  const hasPrev = prevSnap != null;
+  const prevEval = hasPrev
+    ? evaluateWatchCriteria(threshold, prevSnap)
+    : null;
+  const currEval = evaluateWatchCriteria(threshold, currInput);
 
   const now = Date.now();
-  // Note: cooldown enforced in app logic; rare duplicate possible on crash-restart.
   const cooldownOk =
     lastAlertedAt == null || now - lastAlertedAt.getTime() >= COOLDOWN_MS;
   if (!cooldownOk) {
-    needPrice = false;
-    needAvail = false;
+    console.info(
+      `[run-monitor] alert skip watch=${watch.id} reason=cooldown_active`,
+    );
+    return;
   }
 
-  if (!needPrice && !needAvail) return;
+  if (!hasPrev) {
+    console.info(
+      `[run-monitor] alert skip watch=${watch.id} reason=no_previous_snapshot`,
+    );
+    return;
+  }
+
+  const transitionFires = shouldAlertOnTransition(
+    hasPrev,
+    prevEval!.met,
+    currEval.met,
+  );
+  if (!transitionFires) {
+    console.info(
+      `[run-monitor] alert skip watch=${watch.id} reason=no_state_change met_prev=${prevEval!.met} met_curr=${currEval.met}`,
+    );
+    return;
+  }
+
+  const canEmail = Boolean(
+    watch.alert_email && watch.alert_email_address?.trim(),
+  );
+  if (!canEmail && !(watch.alert_sms && watch.alert_phone_e164?.trim())) {
+    console.info(
+      `[run-monitor] alert skip watch=${watch.id} reason=no_delivery_address`,
+    );
+    return;
+  }
+
+  const summaryLines = buildTriggerSummaryLines(threshold, prevEval!, currEval);
+  const urlBlock =
+    ticketUrls.length === 0
+      ? "(no ticket URL on file)"
+      : ticketUrls.map((u) => u).join("\n");
+  const body =
+    `Seatcheck alert: "${watch.label}"\n\n` +
+    `${summaryLines.join("\n")}\n\n` +
+    `Current extracted price: ${agg.extracted_price ?? "none"}\n` +
+    (threshold != null ? `Your price threshold: $${threshold}\n` : "") +
+    `\nTicket page:\n${urlBlock}\n\n` +
+    `Keywords: ${agg.extracted_keywords.join(", ") || "(none)"}\n` +
+    `Watch ID: ${watch.id}`;
+
+  const triggerType: TriggerType = pickAlertLogTriggerType(threshold);
+  const triggerValueDetail = [
+    `summary=${summaryLines.join(" ")}`,
+    `avail_prev=${prevEval!.availabilityMet} avail_curr=${currEval.availabilityMet}`,
+    `price_prev=${prevEval!.priceMet} price_curr=${currEval.priceMet}`,
+    `keywords=${agg.extracted_keywords.join(", ")}`.slice(0, 400),
+  ]
+    .join(" | ")
+    .slice(0, 500);
+
+  const emailSubject = `Seatcheck: ${watch.label}`;
+
+  console.info(
+    `[run-monitor] alert fire watch=${watch.id} label=${JSON.stringify(watch.label)} trigger=${triggerType}`,
+  );
 
   const alertBase = {
     watchId: watch.id,
     label: watch.label,
+    emailSubject,
     alert_email: watch.alert_email,
     alert_sms: watch.alert_sms,
     alert_email_address: watch.alert_email_address,
@@ -166,58 +267,20 @@ async function maybeFireAlerts(
 
   const client = await pool.connect();
   try {
-    if (needPrice) {
-      const body =
-        `Seatcheck alert: "${watch.label}"\n\n` +
-        `Trigger: price_drop\n` +
-        `Current extracted price: ${agg.extracted_price ?? "n/a"}\n` +
-        `Watch ID: ${watch.id}`;
-      const { methods, ok } = await deliverAlert({
-        ...alertBase,
-        triggerType: "price_drop",
-        body,
-      });
-      await client.query(
-        `INSERT INTO alert_log (watch_id, trigger_type, trigger_value, alert_methods, delivery_status)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [
-          watch.id,
-          "price_drop",
-          agg.extracted_price,
-          methods,
-          ok ? "sent" : "failed",
-        ],
-      );
-    }
-
-    if (needAvail) {
-      const body =
-        `Seatcheck alert: "${watch.label}"\n\n` +
-        `Trigger: availability_change\n` +
-        `Keywords: ${agg.extracted_keywords.join(", ") || "(none)"}\n` +
-        `Watch ID: ${watch.id}`;
-      const { methods, ok } = await deliverAlert({
-        ...alertBase,
-        triggerType: "availability_change",
-        body,
-      });
-      await client.query(
-        `INSERT INTO alert_log (watch_id, trigger_type, trigger_value, alert_methods, delivery_status)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [
-          watch.id,
-          "availability_change",
-          agg.extracted_keywords.join(", ").slice(0, 500),
-          methods,
-          ok ? "sent" : "failed",
-        ],
-      );
-    }
-
+    const { methods, ok } = await deliverAlert({
+      ...alertBase,
+      triggerType,
+      body,
+    });
     await client.query(
-      `UPDATE watches SET last_alerted_at = NOW() WHERE id = $1`,
-      [watch.id],
+      `INSERT INTO alert_log (watch_id, trigger_type, trigger_value, alert_methods, delivery_status)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [watch.id, triggerType, triggerValueDetail, methods, ok ? "sent" : "failed"],
     );
+
+    await client.query(`UPDATE watches SET last_alerted_at = NOW() WHERE id = $1`, [
+      watch.id,
+    ]);
   } finally {
     client.release();
   }
@@ -231,6 +294,7 @@ async function processOneWatch(
   let prevSnap: SnapshotRow | null = null;
   let lastAlertedAt: Date | null = null;
   let aggregated: Awaited<ReturnType<typeof fetchAndAggregate>> | null = null;
+  let ticketUrls: string[] = [];
 
   try {
     await client.query("BEGIN");
@@ -265,8 +329,10 @@ async function processOneWatch(
       return "processed";
     }
 
+    ticketUrls = uRes.rows.map((r) => r.url);
+
     const pRes = await client.query<SnapshotRow>(
-      `SELECT extracted_price, extracted_keywords FROM snapshots
+      `SELECT extracted_price, extracted_keywords, raw_text FROM snapshots
        WHERE watch_id = $1
        ORDER BY checked_at DESC
        LIMIT 1`,
@@ -342,7 +408,14 @@ async function processOneWatch(
 
   if (watch != null && aggregated != null) {
     try {
-      await maybeFireAlerts(pool, watch, prevSnap, aggregated, lastAlertedAt);
+      await maybeFireAlerts(
+        pool,
+        watch,
+        prevSnap,
+        aggregated,
+        lastAlertedAt,
+        ticketUrls,
+      );
     } catch (e) {
       console.error(`[run-monitor] Layer 3 alert/DB error: ${String(e)}`);
       return "abort";
