@@ -54,6 +54,8 @@ export async function POST(request: Request) {
       );
     }
 
+    console.log("[api/watches POST] watch insert OK", { watchId: watch.id });
+
     const urlRows = parsed.urls.map((u) => ({
       watch_id: watch.id,
       url: u.url,
@@ -71,7 +73,13 @@ export async function POST(request: Request) {
       );
     }
 
+    console.log("[api/watches POST] watch_urls insert OK", {
+      watchId: watch.id,
+      urlCount: urlRows.length,
+    });
+
     const firstUrl = parsed.urls[0]?.url ?? null;
+    console.log("[api/watches POST] about to call sendWatchCreatedConfirmations");
     console.log("[notify] confirmation email triggered");
     const warnings = await sendWatchCreatedConfirmations({
       label: watch.label,
