@@ -71,8 +71,11 @@ export async function POST(request: Request) {
       );
     }
 
+    const firstUrl = parsed.urls[0]?.url ?? null;
     const warnings = await sendWatchCreatedConfirmations({
       label: watch.label,
+      first_watch_url: firstUrl,
+      price_threshold: watch.price_threshold,
       alert_email: watch.alert_email,
       alert_sms: watch.alert_sms,
       alert_email_address: watch.alert_email_address,

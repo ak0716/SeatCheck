@@ -41,10 +41,8 @@ export function AddWatchForm({ onCreated }: AddWatchFormProps) {
   const [maxPrice, setMaxPrice] = useState("");
   const [minTickets, setMinTickets] = useState(1);
 
-  const [emailEnabled, setEmailEnabled] = useState(false);
   const [email, setEmail] = useState("");
-  const [smsEnabled, setSmsEnabled] = useState(false);
-  const [sms, setSms] = useState("");
+  const [step4EmailError, setStep4EmailError] = useState<string | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -61,10 +59,8 @@ export function AddWatchForm({ onCreated }: AddWatchFormProps) {
     setAddLoading(false);
     setMaxPrice("");
     setMinTickets(1);
-    setEmailEnabled(false);
     setEmail("");
-    setSmsEnabled(false);
-    setSms("");
+    setStep4EmailError(null);
     setSubmitting(false);
     setSubmitError(null);
   }, []);
@@ -156,8 +152,19 @@ export function AddWatchForm({ onCreated }: AddWatchFormProps) {
     setAddUrl("");
   }, [addUrl, runPreview, sources.length]);
 
-  const step4ContinueDisabled =
-    (!emailEnabled || !email.trim()) && (!smsEnabled || !sms.trim());
+  const isStep4EmailValid = useCallback((value: string) => {
+    const t = value.trim();
+    return t.length > 0 && t.includes("@");
+  }, []);
+
+  const handleStep4Continue = useCallback(() => {
+    if (!isStep4EmailValid(email)) {
+      setStep4EmailError("Please enter a valid email address.");
+      return;
+    }
+    setStep4EmailError(null);
+    setStep(5);
+  }, [email, isStep4EmailValid]);
 
   const handleSubmit = useCallback(async () => {
     setSubmitting(true);
@@ -179,10 +186,10 @@ export function AddWatchForm({ onCreated }: AddWatchFormProps) {
           return Number.isFinite(n) ? n : null;
         })(),
         group_size: minTickets <= 1 ? null : minTickets,
-        alert_email: emailEnabled,
-        alert_sms: smsEnabled,
-        alert_email_address: emailEnabled ? email.trim() : null,
-        alert_phone_e164: smsEnabled ? sms.trim() : null,
+        alert_email: true,
+        alert_sms: false,
+        alert_email_address: email.trim(),
+        alert_phone_e164: null,
       }),
     });
     if (!response.ok) {
@@ -196,14 +203,11 @@ export function AddWatchForm({ onCreated }: AddWatchFormProps) {
     onCreated();
   }, [
     email,
-    emailEnabled,
     label,
     maxPrice,
     minTickets,
     onCreated,
     resetAll,
-    sms,
-    smsEnabled,
     sources,
   ]);
 
@@ -269,17 +273,14 @@ export function AddWatchForm({ onCreated }: AddWatchFormProps) {
 
       {step === 4 ? (
         <AddWatchStep4Contact
-          emailEnabled={emailEnabled}
-          onEmailEnabledChange={setEmailEnabled}
           email={email}
-          onEmailChange={setEmail}
-          smsEnabled={smsEnabled}
-          onSmsEnabledChange={setSmsEnabled}
-          sms={sms}
-          onSmsChange={setSms}
-          continueDisabled={step4ContinueDisabled}
+          onEmailChange={(v) => {
+            setEmail(v);
+            setStep4EmailError(null);
+          }}
+          emailError={step4EmailError}
           onBack={() => setStep(3)}
-          onContinue={() => setStep(5)}
+          onContinue={handleStep4Continue}
         />
       ) : null}
 
@@ -289,8 +290,7 @@ export function AddWatchForm({ onCreated }: AddWatchFormProps) {
           sources={sources}
           maxPrice={maxPrice}
           minTickets={minTickets}
-          emailEnabled={emailEnabled}
-          smsEnabled={smsEnabled}
+          email={email}
           submitting={submitting}
           error={submitError}
           onBack={() => setStep(4)}

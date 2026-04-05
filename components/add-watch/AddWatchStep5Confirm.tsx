@@ -14,20 +14,12 @@ function sourceSummaryParts(sources: AddWatchSource[]): string {
     .join(", ");
 }
 
-function alertSummary(email: boolean, sms: boolean): string {
-  if (email && sms) return "Email + SMS";
-  if (email) return "Email";
-  if (sms) return "SMS";
-  return "—";
-}
-
 type AddWatchStep5ConfirmProps = {
   label: string;
   sources: AddWatchSource[];
   maxPrice: string;
   minTickets: number;
-  emailEnabled: boolean;
-  smsEnabled: boolean;
+  email: string;
   submitting: boolean;
   error: string | null;
   onBack: () => void;
@@ -39,8 +31,7 @@ export function AddWatchStep5Confirm({
   sources,
   maxPrice,
   minTickets,
-  emailEnabled,
-  smsEnabled,
+  email,
   submitting,
   error,
   onBack,
@@ -75,10 +66,8 @@ export function AddWatchStep5Confirm({
           </div>
         ) : null}
         <div className="grid gap-[var(--space-1)]">
-          <dt className="text-small text-[var(--color-text-secondary)]">Alert</dt>
-          <dd className="text-body text-[var(--color-text)]">
-            {alertSummary(emailEnabled, smsEnabled)}
-          </dd>
+          <dt className="text-small text-[var(--color-text-secondary)]">Email</dt>
+          <dd className="text-body text-[var(--color-text)]">{email.trim() || "—"}</dd>
         </div>
       </dl>
 
