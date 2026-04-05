@@ -72,6 +72,7 @@ export async function POST(request: Request) {
     }
 
     const firstUrl = parsed.urls[0]?.url ?? null;
+    console.log("[notify] confirmation email triggered");
     const warnings = await sendWatchCreatedConfirmations({
       label: watch.label,
       first_watch_url: firstUrl,
