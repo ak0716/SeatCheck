@@ -52,8 +52,8 @@ export async function deliverAlert(
   const methods: string[] = [];
   let ok = true;
 
-  const fromEmail =
-    process.env.RESEND_FROM_EMAIL?.trim() || "Seatcheck <onboarding@resend.dev>";
+  /** Resend free-tier sender; custom domains must be verified in Resend (do not use unverified Gmail here). */
+  const fromEmail = "onboarding@resend.dev";
   const subject =
     input.emailSubject?.trim() ||
     `Seatcheck: ${input.triggerType.replace(/_/g, " ")} — ${input.label}`;

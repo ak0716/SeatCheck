@@ -58,8 +58,8 @@ export async function sendWatchCreatedConfirmations(
 
   if (input.alert_email && input.alert_email_address) {
     const key = process.env.RESEND_API_KEY?.trim();
-    const from =
-      process.env.RESEND_FROM_EMAIL?.trim() || "Seatcheck <onboarding@resend.dev>";
+    /** Resend free-tier sender; custom domains must be verified in Resend (do not use unverified Gmail here). */
+    const from = "onboarding@resend.dev";
     if (!key) {
       const msg = "RESEND_API_KEY is not configured";
       console.error(`[notify] watch-created email skipped: ${msg}`);
