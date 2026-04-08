@@ -11,6 +11,10 @@ import { deliverAlert } from "@/lib/monitor/deliver-alert";
 import { fetchPage } from "@/lib/monitor/fetch-page";
 import { parseHtml } from "@/lib/monitor/parse-html";
 import { parseDollarString } from "@/lib/monitor/price-compare";
+import {
+  fetchTicketmasterData,
+  isTicketmasterRateLimitError,
+} from "@/lib/monitor/ticketmaster";
 
 import type { TriggerType } from "@/lib/types";
 
@@ -86,9 +90,23 @@ function thresholdNumber(w: WatchRow): number | null {
   return Number.isFinite(v) ? v : null;
 }
 
+type WatchUrlRow = {
+  url: string;
+  platform: string | null;
+  event_id: string | null;
+};
+
+function useTicketmasterApi(row: WatchUrlRow): boolean {
+  return (
+    row.platform === "ticketmaster" &&
+    row.event_id != null &&
+    String(row.event_id).trim() !== ""
+  );
+}
+
 async function fetchAndAggregate(
   watchId: string,
-  urls: { url: string }[],
+  urls: WatchUrlRow[],
 ): Promise<{
   extracted_price: string | null;
   extracted_keywords: string[];
@@ -102,15 +120,35 @@ async function fetchAndAggregate(
   };
   const parts: Acc[] = [];
   for (const row of urls) {
-    const html = await fetchPage(row.url);
-    const parsed = parseHtml(html, watchId);
-    const n = parseDollarString(parsed.priceText);
-    parts.push({
-      priceNum: n ?? NaN,
-      priceText: parsed.priceText,
-      keywords: parsed.keywords,
-      rawText: parsed.rawText,
-    });
+    console.log(
+      `[run-monitor DEBUG] watch_url platform=${row.platform ?? "null"} event_id=${row.event_id ?? "null"} → ${useTicketmasterApi(row) ? "ticketmaster API path" : "scraper path"}`,
+    );
+    if (useTicketmasterApi(row)) {
+      const tm = await fetchTicketmasterData(String(row.event_id).trim());
+      const priceText =
+        tm.minPrice != null ? `$${tm.minPrice.toFixed(2)}` : null;
+      const n = tm.minPrice != null ? tm.minPrice : NaN;
+      const keywords = tm.available ? ["Available"] : [];
+      const rawText = tm.available
+        ? "Ticketmaster API: on sale"
+        : "Ticketmaster API: not on sale";
+      parts.push({
+        priceNum: n,
+        priceText,
+        keywords,
+        rawText,
+      });
+    } else {
+      const html = await fetchPage(row.url);
+      const parsed = parseHtml(html, watchId);
+      const n = parseDollarString(parsed.priceText);
+      parts.push({
+        priceNum: n ?? NaN,
+        priceText: parsed.priceText,
+        keywords: parsed.keywords,
+        rawText: parsed.rawText,
+      });
+    }
   }
 
   let minNum = Infinity;
@@ -288,7 +326,7 @@ async function maybeFireAlerts(
 
 async function processOneWatch(
   pool: Pool,
-): Promise<"empty" | "processed" | "abort"> {
+): Promise<"empty" | "processed" | "abort" | "rate_limited"> {
   const client = await pool.connect();
   let watch: WatchRow | undefined;
   let prevSnap: SnapshotRow | null = null;
@@ -317,8 +355,8 @@ async function processOneWatch(
       ? new Date(watch.last_alerted_at as string | Date)
       : null;
 
-    const uRes = await client.query<{ url: string }>(
-      `SELECT url FROM watch_urls WHERE watch_id = $1 ORDER BY created_at ASC`,
+    const uRes = await client.query<WatchUrlRow>(
+      `SELECT url, platform, event_id FROM watch_urls WHERE watch_id = $1 ORDER BY created_at ASC`,
       [watch.id],
     );
 
@@ -344,6 +382,17 @@ async function processOneWatch(
     try {
       agg = await fetchAndAggregate(watch.id, uRes.rows);
     } catch (e) {
+      if (isTicketmasterRateLimitError(e)) {
+        console.error(
+          `[run-monitor] Ticketmaster 429 — stopping cron batch (watch ${watch.id})`,
+        );
+        try {
+          await client.query("ROLLBACK");
+        } catch {
+          /* ignore */
+        }
+        return "rate_limited";
+      }
       const msg = e instanceof Error ? e.message : String(e);
       console.error(`[run-monitor] watch ${watch.id} fetch/parse failed: ${msg}`);
       await handleLayer1Failure(
@@ -427,7 +476,7 @@ async function processOneWatch(
 
 export type MonitorRunSummary = {
   processed: number;
-  stoppedReason: "limit" | "empty" | "abort";
+  stoppedReason: "limit" | "empty" | "abort" | "rate_limited";
 };
 
 export async function runMonitor(): Promise<MonitorRunSummary> {
@@ -447,6 +496,10 @@ export async function runMonitor(): Promise<MonitorRunSummary> {
       const result = await processOneWatch(pool);
       if (result === "abort") {
         stoppedReason = "abort";
+        break;
+      }
+      if (result === "rate_limited") {
+        stoppedReason = "rate_limited";
         break;
       }
       if (result === "empty") {
