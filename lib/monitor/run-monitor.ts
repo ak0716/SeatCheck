@@ -96,7 +96,7 @@ type WatchUrlRow = {
   event_id: string | null;
 };
 
-function useTicketmasterApi(row: WatchUrlRow): boolean {
+function shouldUseTicketmasterApi(row: WatchUrlRow): boolean {
   return (
     row.platform === "ticketmaster" &&
     row.event_id != null &&
@@ -121,9 +121,9 @@ async function fetchAndAggregate(
   const parts: Acc[] = [];
   for (const row of urls) {
     console.log(
-      `[run-monitor DEBUG] watch_url platform=${row.platform ?? "null"} event_id=${row.event_id ?? "null"} → ${useTicketmasterApi(row) ? "ticketmaster API path" : "scraper path"}`,
+      `[run-monitor DEBUG] watch_url platform=${row.platform ?? "null"} event_id=${row.event_id ?? "null"} → ${shouldUseTicketmasterApi(row) ? "ticketmaster API path" : "scraper path"}`,
     );
-    if (useTicketmasterApi(row)) {
+    if (shouldUseTicketmasterApi(row)) {
       const tm = await fetchTicketmasterData(String(row.event_id).trim());
       const priceText =
         tm.minPrice != null ? `$${tm.minPrice.toFixed(2)}` : null;
