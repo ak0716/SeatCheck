@@ -10,10 +10,10 @@ const DISCOVERY_EVENTS_SEARCH =
   "https://app.ticketmaster.com/discovery/v2/events.json";
 const USER_AGENT = "Mozilla/5.0 (compatible; Seatcheck/1.0)";
 
-/** Ticketmaster Discovery search-by-URL response subset. */
+/** Ticketmaster Discovery search response subset (keyword search). */
 type TicketmasterDiscoveryEventsSearchJson = {
   _embedded?: {
-    events?: Array<{ id?: string }>;
+    events?: Array<{ id?: string; url?: string }>;
   };
 };
 
@@ -21,15 +21,30 @@ type DiscoveryLookupOk = { ok: true; id: string };
 type DiscoveryLookupFail = { ok: false; reason: string };
 type DiscoveryLookupResult = DiscoveryLookupOk | DiscoveryLookupFail;
 
+function urlsMatchCaseInsensitive(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+/**
+ * Resolves Discovery API event id using keyword search + URL match.
+ * @param originalUrl Full Ticketmaster page URL the user entered
+ * @param urlDerivedId Path segment after /event/ from the same URL
+ */
 async function resolveTicketmasterDiscoveryEventId(
   originalUrl: string,
+  urlDerivedId: string,
 ): Promise<DiscoveryLookupResult> {
   const key = process.env.TICKETMASTER_API_KEY?.trim();
   if (!key) {
     return { ok: false, reason: "no_api_key" };
   }
 
-  const apiUrl = `${DISCOVERY_EVENTS_SEARCH}?apikey=${encodeURIComponent(key)}&url=${encodeURIComponent(originalUrl)}`;
+  const keyword = urlDerivedId.trim();
+  if (!keyword) {
+    return { ok: false, reason: "empty_url_derived_id" };
+  }
+
+  const apiUrl = `${DISCOVERY_EVENTS_SEARCH}?apikey=${encodeURIComponent(key)}&keyword=${encodeURIComponent(keyword)}`;
 
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), DISCOVERY_LOOKUP_TIMEOUT_MS);
@@ -54,10 +69,21 @@ async function resolveTicketmasterDiscoveryEventId(
       return { ok: false, reason: "parse_error" };
     }
 
-    const rawId = data._embedded?.events?.[0]?.id;
-    if (typeof rawId === "string" && rawId.trim() !== "") {
-      return { ok: true, id: rawId.trim() };
+    const events = data._embedded?.events;
+    if (!events || events.length === 0) {
+      return { ok: false, reason: "no_match" };
     }
+
+    for (const ev of events) {
+      const eventUrl = ev.url;
+      if (typeof eventUrl !== "string" || eventUrl.trim() === "") continue;
+      if (!urlsMatchCaseInsensitive(eventUrl, originalUrl)) continue;
+      const rawId = ev.id;
+      if (typeof rawId === "string" && rawId.trim() !== "") {
+        return { ok: true, id: rawId.trim() };
+      }
+    }
+
     return { ok: false, reason: "no_match" };
   } catch (e) {
     const name = e instanceof Error ? e.name : "";
@@ -95,8 +121,11 @@ export async function POST(request: Request) {
 
     const result = await fetchTicketPagePreview(url);
 
-    if (result.platform === "ticketmaster") {
-      const lookup = await resolveTicketmasterDiscoveryEventId(url);
+    if (result.platform === "ticketmaster" && result.eventId) {
+      const lookup = await resolveTicketmasterDiscoveryEventId(
+        url,
+        result.eventId,
+      );
       if (lookup.ok) {
         return NextResponse.json({ ...result, eventId: lookup.id });
       }
