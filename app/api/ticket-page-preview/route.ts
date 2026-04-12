@@ -21,17 +21,13 @@ type DiscoveryLookupOk = { ok: true; id: string };
 type DiscoveryLookupFail = { ok: false; reason: string };
 type DiscoveryLookupResult = DiscoveryLookupOk | DiscoveryLookupFail;
 
-function urlsMatchCaseInsensitive(a: string, b: string): boolean {
-  return a.trim().toLowerCase() === b.trim().toLowerCase();
-}
-
 /**
- * Resolves Discovery API event id using keyword search + URL match.
- * @param originalUrl Full Ticketmaster page URL the user entered
- * @param urlDerivedId Path segment after /event/ from the same URL
+ * Resolves Discovery API event id using keyword search + path segment match.
+ * Picks the event whose `url` contains `/event/{urlDerivedId}` (case-insensitive),
+ * e.g. short or slugged Ticketmaster URLs.
+ * @param urlDerivedId Path segment after /event/ from the user's Ticketmaster URL
  */
 async function resolveTicketmasterDiscoveryEventId(
-  originalUrl: string,
   urlDerivedId: string,
 ): Promise<DiscoveryLookupResult> {
   const key = process.env.TICKETMASTER_API_KEY?.trim();
@@ -74,10 +70,12 @@ async function resolveTicketmasterDiscoveryEventId(
       return { ok: false, reason: "no_match" };
     }
 
+    const pathSegment = `/event/${keyword}`.toLowerCase();
+
     for (const ev of events) {
       const eventUrl = ev.url;
       if (typeof eventUrl !== "string" || eventUrl.trim() === "") continue;
-      if (!urlsMatchCaseInsensitive(eventUrl, originalUrl)) continue;
+      if (!eventUrl.toLowerCase().includes(pathSegment)) continue;
       const rawId = ev.id;
       if (typeof rawId === "string" && rawId.trim() !== "") {
         return { ok: true, id: rawId.trim() };
@@ -122,10 +120,7 @@ export async function POST(request: Request) {
     const result = await fetchTicketPagePreview(url);
 
     if (result.platform === "ticketmaster" && result.eventId) {
-      const lookup = await resolveTicketmasterDiscoveryEventId(
-        url,
-        result.eventId,
-      );
+      const lookup = await resolveTicketmasterDiscoveryEventId(result.eventId);
       if (lookup.ok) {
         return NextResponse.json({ ...result, eventId: lookup.id });
       }
