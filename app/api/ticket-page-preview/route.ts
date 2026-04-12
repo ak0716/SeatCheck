@@ -22,12 +22,49 @@ type DiscoveryLookupFail = { ok: false; reason: string };
 type DiscoveryLookupResult = DiscoveryLookupOk | DiscoveryLookupFail;
 
 /**
- * Resolves Discovery API event id using keyword search + path segment match.
- * Picks the event whose `url` contains `/event/{urlDerivedId}` (case-insensitive),
- * e.g. short or slugged Ticketmaster URLs.
- * @param urlDerivedId Path segment after /event/ from the user's Ticketmaster URL
+ * Path segment immediately before `/event/{id}` (same id as urlDerivedId), or null
+ * when the URL is only `/event/{id}` with no preceding segment or id mismatch.
+ */
+function extractSlugBeforeEvent(
+  ticketmasterPageUrl: string,
+  urlDerivedId: string,
+): string | null {
+  const idNorm = urlDerivedId.trim().toLowerCase();
+  if (!idNorm) return null;
+
+  let pathname: string;
+  try {
+    pathname = new URL(ticketmasterPageUrl).pathname;
+  } catch {
+    return null;
+  }
+
+  const segments = pathname.split("/").filter(Boolean);
+  for (let i = 0; i < segments.length - 1; i++) {
+    if (segments[i].toLowerCase() !== "event") continue;
+    const pathId = segments[i + 1];
+    if (!pathId || pathId.toLowerCase() !== idNorm) continue;
+    if (i === 0) return null;
+    return segments[i - 1] ?? null;
+  }
+
+  return null;
+}
+
+/** First up to 3 hyphen-separated tokens from the slug, joined with spaces. */
+function slugToDiscoveryKeyword(slug: string): string | null {
+  const parts = slug.split("-").filter((p) => p.length > 0);
+  if (parts.length === 0) return null;
+  return parts.slice(0, 3).join(" ");
+}
+
+/**
+ * Resolves Discovery API event id: keyword search from URL slug, then URL path match.
+ * @param ticketmasterPageUrl Full Ticketmaster event page URL
+ * @param urlDerivedId Path segment after /event/ from the same URL
  */
 async function resolveTicketmasterDiscoveryEventId(
+  ticketmasterPageUrl: string,
   urlDerivedId: string,
 ): Promise<DiscoveryLookupResult> {
   const key = process.env.TICKETMASTER_API_KEY?.trim();
@@ -35,9 +72,19 @@ async function resolveTicketmasterDiscoveryEventId(
     return { ok: false, reason: "no_api_key" };
   }
 
-  const keyword = urlDerivedId.trim();
-  if (!keyword) {
+  const idKeyword = urlDerivedId.trim();
+  if (!idKeyword) {
     return { ok: false, reason: "empty_url_derived_id" };
+  }
+
+  const slug = extractSlugBeforeEvent(ticketmasterPageUrl, idKeyword);
+  if (slug === null) {
+    return { ok: false, reason: "no_slug" };
+  }
+
+  const keyword = slugToDiscoveryKeyword(slug);
+  if (!keyword) {
+    return { ok: false, reason: "empty_keyword" };
   }
 
   const apiUrl = `${DISCOVERY_EVENTS_SEARCH}?apikey=${encodeURIComponent(key)}&keyword=${encodeURIComponent(keyword)}`;
@@ -70,7 +117,7 @@ async function resolveTicketmasterDiscoveryEventId(
       return { ok: false, reason: "no_match" };
     }
 
-    const pathSegment = `/event/${keyword}`.toLowerCase();
+    const pathSegment = `/event/${idKeyword}`.toLowerCase();
 
     for (const ev of events) {
       const eventUrl = ev.url;
@@ -120,7 +167,10 @@ export async function POST(request: Request) {
     const result = await fetchTicketPagePreview(url);
 
     if (result.platform === "ticketmaster" && result.eventId) {
-      const lookup = await resolveTicketmasterDiscoveryEventId(result.eventId);
+      const lookup = await resolveTicketmasterDiscoveryEventId(
+        url,
+        result.eventId,
+      );
       if (lookup.ok) {
         return NextResponse.json({ ...result, eventId: lookup.id });
       }
