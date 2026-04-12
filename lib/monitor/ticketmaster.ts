@@ -114,9 +114,6 @@ export async function fetchTicketmasterData(
     throw new Error("Ticketmaster event_id is empty");
   }
 
-  const urlForLog = `${DISCOVERY_BASE}/${encodeURIComponent(trimmedId)}.json?apikey=[REDACTED]`;
-  console.log(`[ticketmaster DEBUG] fetching ${urlForLog}`);
-
   const MAX_ATTEMPTS = 4;
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {

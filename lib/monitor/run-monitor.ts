@@ -120,9 +120,6 @@ async function fetchAndAggregate(
   };
   const parts: Acc[] = [];
   for (const row of urls) {
-    console.log(
-      `[run-monitor DEBUG] watch_url platform=${row.platform ?? "null"} event_id=${row.event_id ?? "null"} → ${shouldUseTicketmasterApi(row) ? "ticketmaster API path" : "scraper path"}`,
-    );
     if (shouldUseTicketmasterApi(row)) {
       const tm = await fetchTicketmasterData(String(row.event_id).trim());
       const priceText =

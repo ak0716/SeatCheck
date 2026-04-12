@@ -119,30 +119,12 @@ export async function POST(request: Request) {
       );
     }
 
-    console.log(`[ticket-page-preview DEBUG] url=${url}`);
-
     const result = await fetchTicketPagePreview(url);
 
-    const discoveryLookupAttempted =
-      result.platform === "ticketmaster" && Boolean(result.eventId);
-    console.log(
-      `[ticket-page-preview DEBUG] platform=${result.platform ?? "null"}`,
-    );
-    console.log(`[ticket-page-preview DEBUG] eventId=${result.eventId ?? "null"}`);
-    console.log(
-      `[ticket-page-preview DEBUG] discoveryLookupAttempted=${discoveryLookupAttempted}`,
-    );
-
     if (result.platform === "ticketmaster" && result.eventId) {
-      console.log(
-        `[ticket-page-preview DEBUG] attempting Discovery lookup for eventId=${result.eventId}`,
-      );
       const lookup = await resolveTicketmasterDiscoveryEventId(
         url,
         result.eventId,
-      );
-      console.log(
-        `[ticket-page-preview DEBUG] Discovery lookup result=${JSON.stringify(lookup)}`,
       );
       if (lookup.ok) {
         return NextResponse.json({ ...result, eventId: lookup.id });
